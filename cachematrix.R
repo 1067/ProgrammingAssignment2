@@ -1,96 +1,110 @@
-## Put comments here that give an overall description of what your
-## functions do
-
-## Function returns a list which
-## contains methods to access matrix and its inversed stored in the cache 
-## $get, $set for matrix and $getInversed, $setInvesed for the inverse of matrix
-makeCacheMatrix <- function(matrix = matrix()) {
-  ## variable that will hold inversed value in
-  ## funcation level environment
-  inversed <- NULL
+## Description:
+##  Returns a list which
+##  contains methods to access data and associated payload stored in the cache 
+## Arguments:
+##  data  object to cache
+## Output:
+##  list of cache accessors: 
+##    $get, $set for data and 
+##    $getPayload, $setPayload for the payload
+makeCache <- function(data) {
+  ## variable that will hold payload in
+  ## funcations level environment (cache)
+  payload <- list()
   
-  ## update matrix in the cache
-  set <- function(value) {
-    matrix <<- value
-    ## drop inversed value 'cause in that point 
-    ## we can't guarantee that 'matrix' is equal to passed 'value'
-    inversed <<- NULL
-  }
-  
-  ## returns cached matrix
-  get <- function() x
-  
-  ## update inversed value in the cache
-  setInversed <- function(value) inversed <<- value
-  
-  ## returns cached inverse value
-  getInversed <- function() inversed
-  
-  ## list of accessors
-  list(set = set, get = get, setInversed = setInversed, getInversed = getInversed)
-}
-
-makeCache <- function(data, payloadLabel = "Payload") {
-  ## variable that will hold inversed value in
-  ## funcation level environmenta
-  payload <- NULL
-  
-  ## update matrix in the cache
+  ## update data in the cache
   set <- function(value) {
     data <<- value
-    ## drop inversed value 'cause in that point 
-    ## we can't guarantee that 'matrix' is equal to passed 'value'
-    payload <<- NULL
+    ## drop payload 'cause in that point we can't
+    ## guarantee that 'data' is equal to passed 'value'
+    payload <<- list()
   }
   
-  ## returns cached matrix
+  ## returns cached data
   get <- function() data
   
-  ## update inversed value in the cache
-  setPayload <- function(value) payload <<- value
+  ## update payload value by name in the cache
+  setPayload <- function(name, value) payload[[name]] <<- value
   
-  ## returns cached inverse value
-  getPayload <- function() payload
-  
-  ## helper function which create accessors names for
-  ## payload stored in the cache
-  makeLabel <- function(prefix) paste(prefix, payloadLabel, sep = "")
+  ## returns cached payload by name
+  getPayload <- function(name) payload[[name]]
   
   ## list of accessors
-  env <- new.env()
-  
-  env$set <- set
-  env$get <- get
-  assign(payloadLabel, envir=env)
-  assign(makeLabel("get"), getPayload, envir=env)
-  
-  as.list(env)
+  list(get = get, set = set, getPayload = getPayload, setPayload = setPayload)
 }
 
-cachePayloadMaker <- function(cache, payloadLabel, makePayload, ...) {
-  ## lookup into cache for calculated payload
-  getPayload <- paste("get", payloadLabel, sep="")
-  payload <- cache[[getPayload]]()
-  
-  ## checking that cached value is exists
-  if(is.null(payload) == FALSE) {
-    ## if so use it
-    message("returning cached payload")
-  } else {
-    ## otherwise, calculate payload using cached data
-    payload <- makePayload(cache$get(), ...)
-    ## store calculated payloaad into cache
-    setPayload <- paste("set", payloadLabel, sep="")
-    cache[[setPayload]](payload)
+## Description:
+##  Makes a function which consume the same set of arguments as
+##  as original and stores evaluated data in cache to prevent
+##  recalculation
+## Arguments:
+##  payloadLabel  label for distinguishing among the others
+##  makePayload   function which produce data calculation
+## Output:
+##  described function
+cachePayloadMaker <- function(payloadLabel, makePayload) {
+  function(cache, ...) {
+    ## lookup into cache for calculated payload
+    payload <- cache$getPayload(payloadLabel)
+    
+    ## checking that cached value is exists
+    if(is.null(payload) == FALSE) {
+      ## if so use it and log that the
+      ## data is retrieved from cache
+      message("returning cached payload")
+    } else {
+      ## otherwise, calculate payload using cached data
+      payload <- makePayload(cache$get(), ...)
+      ## store calculated payloaad into cache
+      cache$setPayload(payloadLabel, payload)
+    }
+    
+    ## Return a matrix that is the inverse of 'matrix'
+    payload
+  }
+}
+
+## Description:
+##  Constructs object which holds matrix and 
+##  cached payload
+## Arguments:
+##  matrix  an instance of matrix
+## Exceptions:
+##  evaluation will stop if given object is 
+##  not an instance of matrix
+makeCacheMatrix <- function(matrix = matrix()) {
+  if(is.matrix(matrix) == FALSE) {
+    stop("given object is not an instance of matrix")
   }
   
-  ## Return a matrix that is the inverse of 'matrix'
-  payload
+  makeCache(matrix)
 }
 
-makeCacheMatrix <- function(matrix = matrix()) makeCache(matrix, "Inversed")
+## Description:
+##  Constructed function (from cachePayloadMaker) which
+##  uses standard 'solve' function to evaluate and
+##  stores evaluated payload in 'Inversed' cache item
+cacheSolve <- cachePayloadMaker("Inversed", solve)
 
-cacheSolve <- function(cachedMatrix, ...) cachePayloadMaker(cachedMatrix, "Inversed", solve)
+## Description:
+##  Constructed function (from cachePayloadMaker) which
+##  uses standard 'mean' function to evaluate and
+##  stores evaluated payload in 'Mean' cache item
+cacheMean <- cachePayloadMaker("Mean", mean)
 
-x <- makeCacheMatrix(matrix(c(4, 7, 2, 6), 2, 2))
-cacheSolve(x)
+
+## The provided code above still have a range of 
+## not covered cases for e.g. evaluated payload 
+## should also be recalculated in case function parameters
+## are changed ...
+## The rest of the script does some sanity testing
+matrix <- makeCacheMatrix(matrix(c(4, 7, 2, 6), 2, 2))
+
+cacheSolve(matrix)
+cacheMean(matrix)
+cacheSolve(matrix)
+cacheMean(matrix)
+
+matrix$set(matrix(1:9, 3, 3))
+cacheMean(matrix)
+cacheMean(matrix)
